@@ -1,0 +1,14 @@
+{
+  "name": "hive-interface",
+  "version": "1.0.0",
+  "description": "",
+  "main": "test.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "yabapmatt",
+  "license": "MIT",
+  "dependencies": {
+    "@hivechain/dhive": "^0.13.0"
+  }
+}
