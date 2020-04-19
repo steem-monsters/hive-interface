@@ -103,3 +103,4 @@ dist
 # TernJS port file
 .tern-port
 state.json
+state_se.json

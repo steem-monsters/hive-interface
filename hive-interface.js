@@ -1,6 +1,7 @@
 const fs = require('fs');
 const utils = require('./utils');
 const dhive = require('@hivechain/dhive');
+const hive_engine = require('./hive-engine');
 
 let _options = {
 	logging_level: 3,
@@ -272,5 +273,6 @@ module.exports = {
 	broadcast,
 	custom_json,
 	transfer,
-	stream
+	stream,
+	hive_engine: hive_engine
 }
