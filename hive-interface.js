@@ -4,7 +4,7 @@ const dhive = require('@hivechain/dhive');
 
 let _options = {
 	logging_level: 3,
-	rpc_error_limit: 5,
+	rpc_error_limit: 10,
 	rpc_nodes: ["https://anyx.io", "https://api.hive.blog"],
 	save_state: saveState,
 	load_state: loadState,
@@ -13,7 +13,7 @@ let _options = {
 	on_behind_blocks: null
 };
 let clients = [];
-let last_block = 0;
+let last_block = 0, last_vop_block = 0;
 
 function init(options) {
 	_options = Object.assign(_options, options);
@@ -58,6 +58,8 @@ async function tryDatabaseCall(client, method_name, params) {
 
 async function broadcast(method_name, params, key) {
 	return new Promise(async (resolve, reject) => {
+		let error = null;
+
 		for(let i = 0; i < clients.length; i++) {
 			if(clients[i].sm_disabled) {
 				// Check how recently the node was disabled and re-enable if it's been over an hour
@@ -67,34 +69,26 @@ async function broadcast(method_name, params, key) {
 					clients[i].sm_disabled = false;
 			}
 
-			try {
-				let result = await tryBroadcast(clients[i], method_name, params, key);
-
-				if(result.success)
-					resolve(result.result);
-				else
-					reject(result.result);
-
-				return;
-			} catch(err) { }
+			try { resolve(await tryBroadcast(clients[i], method_name, params, key)); }
+			catch(err) { error = err; }
 		}
 		
 		utils.log(`All nodes failed broadcasting [${method_name}]!`, 1, 'Red');
-		reject();
+		reject(error);
 	});
 }
 
 async function tryBroadcast(client, method_name, params, key) {
 	return new Promise(async (resolve, reject) => {
-		client.broadcast.sendOperations([[method_name, params]], dhive.PrivateKey.fromString(key))
-			.then(result => resolve({ success: true, result }))
-			.catch(err => { 
-				utils.log(`Error calling [${method_name}] from node: ${client.address}, Error: ${err}`, 1, 'Yellow');
+		try {
+			client.broadcast.sendOperations([[method_name, params]], dhive.PrivateKey.fromString(key)).then(resolve)
+		} catch (err) { 
+			utils.log(`Error broadcasting tx [${method_name}] from node: ${client.address}, Error: ${err}`, 1, 'Yellow');
 
-				// Record that this client had an error
-				updateClientErrors(client);
-				reject(err);
-			});
+			// Record that this client had an error
+			updateClientErrors(client);
+			reject(err);
+		}
 	});
 }
 
@@ -119,26 +113,7 @@ function updateClientErrors(client) {
 	}
 }
 
-let json_queue = [];
-check_json_queue();
-
 async function custom_json(id, json, account, key, use_active) {
-	return new Promise(resolve => json_queue.push({ id, json, account, key, use_active, resolve }));
-}
-
-async function check_json_queue() {
-	while(json_queue.length > 0) {
-		let op = json_queue.shift();
-		op.resolve(await send_custom_json(op.id, op.json, op.account, op.key, op.use_active));
-	}
-
-	setTimeout(check_json_queue, 3000);
-}
-
-async function send_custom_json(id, json, account, key, use_active, retries) {
-	if(!retries)
-		retries = 0;
-
 	var data = {
 		id: id, 
 		json: JSON.stringify(json),
@@ -146,20 +121,17 @@ async function send_custom_json(id, json, account, key, use_active, retries) {
 		required_posting_auths: use_active ? [] : [account]
 	}
 
-	return await broadcast('custom_json', data, key)
-		.then(r => {
-			utils.log(`Custom JSON [${id}] broadcast successfully.`, 3);
-			return r;
-		})
-		.catch(async err => {
-			utils.log(`Error broadcasting custom_json [${id}]. Error: ${err}`, 2, 'Yellow');
-
-			if(retries < 3) {
-				await utils.timeout(3000);
-				return await send_custom_json(id, json, account, key, use_active, retries + 1);
-			} else
-				utils.log(`Broadcasting custom_json [${id}] failed! Error: ${err}`, 1, 'Red');
-		});
+	return new Promise((resolve, reject) => {
+		broadcast('custom_json', data, key)
+			.then(r => {
+				utils.log(`Custom JSON [${id}] broadcast successfully.`, 3);
+				resolve(r);
+			})
+			.catch(async err => {
+				utils.log(`Error broadcasting custom_json [${id}]. Error: ${err}`, 1, 'Red');
+				reject(err);
+			});
+	});
 }
 
 async function transfer(from, to, amount, memo, key) {
@@ -170,8 +142,14 @@ async function stream(options) {
 	_options = Object.assign(_options, options);
 
 	// Load saved state (last block read)
-	if(_options.load_state)
-		last_block = await _options.load_state();
+	if(_options.load_state) {
+		let state = await _options.load_state();
+
+		if(state) {
+			last_block = state.last_block;
+			last_vop_block = state.last_vop_block;
+		}
+	}
 
 	// Start streaming blocks
 	getNextBlock();
@@ -185,23 +163,51 @@ async function getNextBlock() {
 		return;
 	}
 
+	let cur_block_num = _options.irreversible ? result.last_irreversible_block_num : result.head_block_number;
+
 	if(!last_block || isNaN(last_block))
-		last_block = result.head_block_number - 1;
+		last_block = cur_block_num - 1;
 
 	// We are 20+ blocks behind!
-	if(result.head_block_number >= last_block + 20) {
-		utils.log('Streaming is ' + (result.head_block_number - last_block) + ' blocks behind!', 1, 'Red');
+	if(cur_block_num >= last_block + 20) {
+		utils.log('Streaming is ' + (cur_block_num - last_block) + ' blocks behind!', 1, 'Red');
 
 		if(_options.on_behind_blocks)
-			_options.on_behind_blocks(result.head_block_number - last_block);
+			_options.on_behind_blocks(cur_block_num - last_block);
 	}
 
 	// If we have a new block, process it
-	while(result.head_block_number > last_block)
+	while(cur_block_num > last_block)
 		await processBlock(last_block + 1);
+
+	if(_options.on_virtual_op)
+		await getVirtualOps(result.last_irreversible_block_num);
 
 	// Attempt to load the next block after a 1 second delay (or faster if we're behind and need to catch up)
 	setTimeout(getNextBlock, 1000);
+}
+
+async function getVirtualOps(last_irreversible_block_num) {
+	if(last_irreversible_block_num <= last_vop_block)
+		return;
+
+	let block_num = (!last_vop_block || isNaN(last_vop_block)) ? last_irreversible_block_num : last_vop_block + 1;
+	let result = await api('get_ops_in_block', [block_num]);
+
+	if(!result || !Array.isArray(result))
+		return;
+
+	let ops = result.filter(op => op.virtual_op > 0);
+
+	utils.log(`Loading virtual ops in block ${block_num}, count: ${ops.length}`, 4);
+
+	for(var i = 0; i < ops.length; i++)
+		await _options.on_virtual_op(ops[i]);
+
+	last_vop_block = block_num;
+
+	if(_options.save_state)
+		_options.save_state({ last_block, last_vop_block });
 }
 
 async function processBlock(block_num) {
@@ -240,7 +246,7 @@ async function processBlock(block_num) {
 	last_block = block_num;
 
 	if(_options.save_state)
-		_options.save_state(last_block);
+		_options.save_state({ last_block, last_vop_block });
 }
 
 async function loadState() {
@@ -248,13 +254,13 @@ async function loadState() {
 	if (fs.existsSync('state.json')) {
 		let state = JSON.parse(fs.readFileSync("state.json"));
     utils.log('Restored saved state: ' + JSON.stringify(state));
-    return state.last_block;
+    return state;
 	}
 }
 
-function saveState(last_block) {
+function saveState(state) {
   // Save the last block read to disk
-  fs.writeFile('state.json', JSON.stringify({ last_block }), function (err) {
+  fs.writeFile('state.json', JSON.stringify(state), function (err) {
     if (err)
       utils.log(err);
   });
