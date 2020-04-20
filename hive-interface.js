@@ -70,7 +70,10 @@ async function broadcast(method_name, params, key) {
 					clients[i].sm_disabled = false;
 			}
 
-			try { resolve(await tryBroadcast(clients[i], method_name, params, key)); }
+			try { 
+				resolve(await tryBroadcast(clients[i], method_name, params, key));
+				return;
+			}
 			catch(err) { error = err; }
 		}
 		
@@ -125,7 +128,7 @@ async function custom_json(id, json, account, key, use_active) {
 	return new Promise((resolve, reject) => {
 		broadcast('custom_json', data, key)
 			.then(r => {
-				utils.log(`Custom JSON [${id}] broadcast successfully.`, 3);
+				utils.log(`Custom JSON [${id}] broadcast successfully - Tx: [${r.id}].`, 3);
 				resolve(r);
 			})
 			.catch(async err => {
