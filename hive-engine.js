@@ -59,7 +59,7 @@ async function processTransaction(tx, ssc_block_num, ssc_block_time, block_num, 
 	if(_options.on_op) {
 		try {
 			await	_options.on_op(tx, ssc_block_num, ssc_block_time, block_num, block_id, prev_block_id, utils.tryParse(tx.payload), logs.events);
-		} catch(err) { utils.log(`Error processing Steem Engine transaction [${tx.id}]: ${err}`, 1, 'Red'); }
+		} catch(err) { utils.log(`Error processing Hive Engine transaction [${tx.transactionId}]: ${err}`, 1, 'Red'); }
 	}
 }
 
