@@ -55,9 +55,14 @@ function tryParse(json) {
 	}
 }
 
+function isTxError(err) {
+	return (err && err.name == 'RPCError' && err.jse_info && (err.jse_info.code == 10 || err.jse_info.code > 1000000));
+}
+
 module.exports = {
 	set_options,
 	log,
 	timeout,
-	tryParse
+	tryParse,
+	isTxError
 }

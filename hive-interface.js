@@ -23,76 +23,66 @@ function init(options) {
 }
 
 async function api(method_name, params) {
-	var result = null;
-
-	for(var i = 0; i < clients.length; i++) {
-		if(clients[i].sm_disabled) {
-			// Check how recently the node was disabled and re-enable if it's been over an hour
-			if(clients[i].sm_last_error_date > Date.now() - 60 * 60 * 1000)
-				continue;
-			else
-				clients[i].sm_disabled = false;
+	return new Promise(async (resolve, reject) => {
+		try {
+			resolve(await rpcCall(client => client.database.call(method_name, params)));
+		} catch(err) { 
+			utils.log(`All nodes failed making API call [${method_name}].`, 1, 'Red');
+			reject(err);
 		}
-
-		result = await tryDatabaseCall(clients[i], method_name, params);
-
-		if(result.success)
-			return result.result;
-	}
-	
-	utils.log('All nodes failed calling [' + method_name + ']!', 1, 'Red');
-	return result;
-}
-
-async function tryDatabaseCall(client, method_name, params) {
-	return await client.database.call(method_name, params)
-		.then(async result => { return { success: true, result: result } })
-		.catch(async err => { 
-			utils.log('Error calling [' + method_name + '] from node: ' + client.address + ', Error: ' + err, 1, 'Yellow');
-
-			// Record that this client had an error
-			updateClientErrors(client);
-
-			return { success: false, error: err } 
-		});
+	});
 }
 
 async function broadcast(method_name, params, key) {
 	return new Promise(async (resolve, reject) => {
-		let error = null;
-
-		for(let i = 0; i < clients.length; i++) {
-			if(clients[i].sm_disabled) {
-				// Check how recently the node was disabled and re-enable if it's been over an hour
-				if(clients[i].sm_last_error_date > Date.now() - 60 * 60 * 1000)
-					continue;
-				else
-					clients[i].sm_disabled = false;
-			}
-
-			try { 
-				resolve(await tryBroadcast(clients[i], method_name, params, key));
-				return;
-			}
-			catch(err) { error = err; }
+		try {
+			resolve(await rpcCall(client => client.broadcast.sendOperations([[method_name, params]], dhive.PrivateKey.fromString(key))));
+		} catch(err) {
+			utils.log(`All nodes failed broadcasting operation [${method_name}].`, 1, 'Red');
+			reject(err);
 		}
-		
-		utils.log(`All nodes failed broadcasting [${method_name}]!`, 1, 'Red');
-		reject(error);
 	});
 }
 
-async function tryBroadcast(client, method_name, params, key) {
+async function sendSignedTx(tx) {
 	return new Promise(async (resolve, reject) => {
-		try {
-			client.broadcast.sendOperations([[method_name, params]], dhive.PrivateKey.fromString(key)).then(resolve)
-		} catch (err) { 
-			utils.log(`Error broadcasting tx [${method_name}] from node: ${client.address}, Error: ${err}`, 1, 'Yellow');
+		let op_name = tx.operations && tx.operations.length > 0 ? tx.operations[0][0] : null;
 
-			// Record that this client had an error
-			updateClientErrors(client);
+		try {
+			resolve(await rpcCall(client => client.broadcast.send(tx)));
+		} catch(err) {
+			utils.log(`All nodes failed sending signed tx [${op_name}]!`, 1, 'Red');
 			reject(err);
 		}
+	});
+}
+
+async function rpcCall(call) {
+	return new Promise(async (resolve, reject) => {
+		let error = null;
+
+		for(let i = 0; i < clients.length; i++) {
+			let client = clients[i];
+
+			if(client.disabled) {
+				// Check how recently the node was disabled and re-enable if it's been over an hour
+				if(client.last_error_date > Date.now() - 60 * 60 * 1000)
+					continue;
+				else
+					client.disabled = false;
+			}
+
+			try {
+				return resolve(await call(client));
+			} catch(err) { 
+				// Record that this client had an error
+				updateClientErrors(client);
+				utils.log(`Error making RPC call to node [${client.address}], Error: ${err}`, 1, 'Yellow');
+				error = err;
+			}
+		}
+
+		reject(error);
 	});
 }
 
@@ -277,5 +267,6 @@ module.exports = {
 	custom_json,
 	transfer,
 	stream,
+	sendSignedTx,
 	hive_engine: hive_engine
 }
