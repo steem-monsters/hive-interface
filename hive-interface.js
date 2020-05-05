@@ -27,7 +27,9 @@ async function api(method_name, params) {
 		try {
 			resolve(await rpcCall(client => client.database.call(method_name, params)));
 		} catch(err) { 
-			utils.log(`All nodes failed making API call [${method_name}].`, 1, 'Red');
+			if(!utils.isTxError(err))
+				utils.log(`All nodes failed making API call [${method_name}].`, 1, 'Red');
+
 			reject(err);
 		}
 	});
@@ -38,7 +40,9 @@ async function broadcast(method_name, params, key) {
 		try {
 			resolve(await rpcCall(client => client.broadcast.sendOperations([[method_name, params]], dhive.PrivateKey.fromString(key))));
 		} catch(err) {
-			utils.log(`All nodes failed broadcasting operation [${method_name}].`, 1, 'Red');
+			if(!utils.isTxError(err))
+				utils.log(`All nodes failed broadcasting operation [${method_name}].`, 1, 'Red');
+				
 			reject(err);
 		}
 	});
@@ -75,6 +79,9 @@ async function rpcCall(call) {
 			try {
 				return resolve(await call(client));
 			} catch(err) { 
+				if(utils.isTxError(err))
+					return reject(err);
+
 				// Record that this client had an error
 				updateClientErrors(client);
 				utils.log(`Error making RPC call to node [${client.address}], Error: ${err}`, 1, 'Yellow');
@@ -129,7 +136,17 @@ async function custom_json(id, json, account, key, use_active) {
 }
 
 async function transfer(from, to, amount, memo, key) {
-	return await broadcast('transfer', { amount, from, memo, to }, key);
+	return new Promise((resolve, reject) => {
+		broadcast('transfer', { amount, from, memo, to }, key)
+			.then(r => {
+				utils.log(`Transferred ${amount} to ${to} - Tx: [${r.id}].`, 3);
+				resolve(r);
+			})
+			.catch(async err => {
+				utils.log(`Error transferring ${amount} to ${to}. Error: ${err}`, 1, 'Red');
+				reject(err);
+			});
+	});
 }
 
 async function stream(options) {
