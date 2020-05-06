@@ -1,7 +1,7 @@
 const fs = require('fs');
 const utils = require('./utils');
 const dhive = require('@hivechain/dhive');
-const hive_engine = require('./hive-engine');
+const HiveEngine = require('./hive-engine');
 
 class Hive {
 	clients = [];
@@ -281,4 +281,4 @@ class Hive {
 	}
 }
 
-module.exports = { Hive, hive_engine };
+module.exports = { Hive, HiveEngine };

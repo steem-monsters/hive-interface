@@ -3,84 +3,83 @@ const utils = require('./utils');
 const SSC = require('sscjs');
 let ssc = null;
 
-let _options = {
-	rpc_url: "https://api.hive-engine.com/rpc",
-	chain_id: "ssc-mainnet-hive",
-	save_state: saveState,
-	load_state: loadState,
-	on_op: null
-};
+module.exports = class HiveEngine {
+	ssc = null;
+	_options = {
+		rpc_url: "https://api.hive-engine.com/rpc",
+		chain_id: "ssc-mainnet-hive",
+		save_state: last_block => this.saveState(last_block),
+		load_state: () => this.loadState(),
+		state_file: 'state_he.json',
+		on_op: null
+	};
 
-function init(options) {
-	_options = Object.assign(_options, options);
-	ssc = new SSC(_options.rpc_url);
-}
+	constructor(options) {
+		this._options = Object.assign(this._options, options);
+		this.ssc = new SSC(this._options.rpc_url);
+	}
 
-async function stream(on_op) {
-	_options.on_op = on_op;
-	let last_block = 0;
+	async stream(on_op) {
+		this._options.on_op = on_op;
+		let last_block = 0;
 
-	// Load saved state (last block read)
-	if(_options.load_state)
-		last_block = await _options.load_state();
+		// Load saved state (last block read)
+		if(this._options.load_state)
+			last_block = await this._options.load_state();
 
-	// Start streaming blocks
-	if(last_block > 0)
-		ssc.streamFromTo(last_block + 1, null, processBlock);
-	else
-		ssc.stream(processBlock);
-}
+		// Start streaming blocks
+		if(last_block > 0)
+			this.ssc.streamFromTo(last_block + 1, null, (err, block) => this.processBlock(err, block));
+		else
+			this.ssc.stream((err, block) => this.processBlock(err, block));
+	}
 
-async function processBlock(err, block) {
-	if(err)
-		utils.log('Error processing block: ' + err);
+	async processBlock(err, block) {
+		if(err)
+			utils.log('Error processing block: ' + err);
 
-	if(!block)
-		return;
-	
-	utils.log('Processing block [' + block.blockNumber + ']...', block.blockNumber % 1000 == 0 ? 1 : 4);
+		if(!block)
+			return;
+		
+		utils.log('Processing block [' + block.blockNumber + ']...', block.blockNumber % 1000 == 0 ? 1 : 4);
 
-	try {
-		for(var i = 0; i < block.transactions.length; i++)
-			await processTransaction(block.transactions[i], block.blockNumber, new Date(block.timestamp + 'Z'), block.refSteemBlockNumber, block.refSteemBlockId, block.prevRefSteemBlockId);
-	} catch(err) { utils.log('Error processing block: ' + block.blockNumber + ', Error: ' + err.message); }
-
-	if(_options.save_state)
-		_options.save_state(block.blockNumber);
-}
-
-async function processTransaction(tx, ssc_block_num, ssc_block_time, block_num, block_id, prev_block_id) {
-	let logs = utils.tryParse(tx.logs);
-
-	// The transaction was unsuccessful
-	if(!logs || logs.errors || !logs.events || logs.events.length == 0)
-		return;
-
-	if(_options.on_op) {
 		try {
-			await	_options.on_op(tx, ssc_block_num, ssc_block_time, block_num, block_id, prev_block_id, utils.tryParse(tx.payload), logs.events);
-		} catch(err) { utils.log(`Error processing Hive Engine transaction [${tx.transactionId}]: ${err}`, 1, 'Red'); }
+			for(var i = 0; i < block.transactions.length; i++)
+				await this.processTransaction(block.transactions[i], block.blockNumber, new Date(block.timestamp + 'Z'), block.refSteemBlockNumber, block.refSteemBlockId, block.prevRefSteemBlockId);
+		} catch(err) { utils.log('Error processing block: ' + block.blockNumber + ', Error: ' + err.message); }
+
+		if(this._options.save_state)
+			this._options.save_state(block.blockNumber);
 	}
-}
 
-async function loadState() {
-	// Check if state has been saved to disk, in which case load it
-	if (fs.existsSync('state_se.json')) {
-		let state = JSON.parse(fs.readFileSync("state_se.json"));
-    utils.log('Restored saved state: ' + JSON.stringify(state));
-    return state.last_block;
+	async processTransaction(tx, ssc_block_num, ssc_block_time, block_num, block_id, prev_block_id) {
+		let logs = utils.tryParse(tx.logs);
+
+		// The transaction was unsuccessful
+		if(!logs || logs.errors || !logs.events || logs.events.length == 0)
+			return;
+
+		if(this._options.on_op) {
+			try {
+				await	this._options.on_op(tx, ssc_block_num, ssc_block_time, block_num, block_id, prev_block_id, utils.tryParse(tx.payload), logs.events);
+			} catch(err) { utils.log(`Error processing Hive Engine transaction [${tx.transactionId}]: ${err}`, 1, 'Red'); }
+		}
 	}
-}
 
-function saveState(last_block) {
-  // Save the last block read to disk
-  fs.writeFile('state_se.json', JSON.stringify({ last_block }), function (err) {
-    if (err)
-      utils.log(err);
-  });
-}
+	async loadState() {
+		// Check if state has been saved to disk, in which case load it
+		if (fs.existsSync(this._options.state_file)) {
+			let state = JSON.parse(fs.readFileSync(this._options.state_file));
+			utils.log('Restored saved state: ' + JSON.stringify(state));
+			return state.last_block;
+		}
+	}
 
-module.exports = {
-	init,
-	stream
+	saveState(last_block) {
+		// Save the last block read to disk
+		fs.writeFile(this._options.state_file, JSON.stringify({ last_block }), function (err) {
+			if (err)
+				utils.log(err);
+		});
+	}
 }
