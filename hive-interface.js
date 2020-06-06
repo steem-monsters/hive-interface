@@ -10,7 +10,7 @@ class Hive {
 	_options = {
 		logging_level: 3,
 		rpc_error_limit: 10,
-		rpc_nodes: ["https://anyx.io", "https://api.hive.blog"],
+		rpc_nodes: ["https://api.hive.blog", "https://anyx.io", "https://api.openhive.network", "https://hived.privex.io", "https://api.hivekings.com"],
 		save_state: state => this.saveState(state),
 		load_state: () => this.loadState(),
 		state_file: 'state.json',
@@ -170,32 +170,34 @@ class Hive {
 	}
 
 	async getNextBlock() {
-		var result = await this.api('get_dynamic_global_properties');
+    try {
+      var result = await this.api('get_dynamic_global_properties');
 
-		if(!result) {
-			setTimeout(() => this.getNextBlock(), 1000);
-			return;
-		}
+      if(!result) {
+        setTimeout(() => this.getNextBlock(), 1000);
+        return;
+      }
 
-		let cur_block_num = this._options.irreversible ? result.last_irreversible_block_num : result.head_block_number;
+      let cur_block_num = this._options.irreversible ? result.last_irreversible_block_num : result.head_block_number;
 
-		if(!this.last_block || isNaN(this.last_block))
-			this.last_block = cur_block_num - 1;
+      if(!this.last_block || isNaN(this.last_block))
+        this.last_block = cur_block_num - 1;
 
-		// We are 20+ blocks behind!
-		if(cur_block_num >= this.last_block + 20) {
-			utils.log('Streaming is ' + (cur_block_num - this.last_block) + ' blocks behind!', 1, 'Red');
+      // We are 20+ blocks behind!
+      if(cur_block_num >= this.last_block + 20) {
+        utils.log('Streaming is ' + (cur_block_num - this.last_block) + ' blocks behind!', 1, 'Red');
 
-			if(this._options.on_behind_blocks)
-				this._options.on_behind_blocks(cur_block_num - this.last_block);
-		}
+        if(this._options.on_behind_blocks)
+          this._options.on_behind_blocks(cur_block_num - this.last_block);
+      }
 
-		// If we have a new block, process it
-		while(cur_block_num > this.last_block)
-			await this.processBlock(this.last_block + 1);
+      // If we have a new block, process it
+      while(cur_block_num > this.last_block)
+        await this.processBlock(this.last_block + 1);
 
-		if(this._options.on_virtual_op)
-			await this.getVirtualOps(result.last_irreversible_block_num);
+      if(this._options.on_virtual_op)
+        await this.getVirtualOps(result.last_irreversible_block_num);
+    } catch (err) { utils.log(`Error getting next block: ${err}`, 1, 'Red'); }
 
 		// Attempt to load the next block after a 1 second delay (or faster if we're behind and need to catch up)
 		setTimeout(() => this.getNextBlock(), 1000);
