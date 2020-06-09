@@ -98,22 +98,22 @@ class Hive {
 
 	updateClientErrors(client) {
 		// Check if the client has had errors within the last 10 minutes
-		if(client.sm_last_error_date && client.sm_last_error_date > Date.now() - 10 * 60 * 1000)
-			client.sm_errors++;	
+		if(client.last_error_date && client.last_error_date > Date.now() - 10 * 60 * 1000)
+			client.errors++;	
 		else
-			client.sm_errors = 1;
+			client.errors = 1;
 
-		client.sm_last_error_date = Date.now();
+		client.last_error_date = Date.now();
 
-		if(client.sm_errors >= this._options.rpc_error_limit) {
+		if(client.errors >= this._options.rpc_error_limit) {
 			utils.log('Disabling node: ' + client.address + ' due to too many errors!', 1, 'Red');
-			client.sm_disabled = true;
+			client.disabled = true;
 		}
 
 		// If all clients have been disabled, we're in trouble, but just try re-enabling them all
-		if(!this.clients.find(c => !c.sm_disabled)) {
+		if(!this.clients.find(c => !c.disabled)) {
 			utils.log('All clients disabled!!! Re-enabling them...', 1, 'Red');
-			this.clients.forEach(c => c.sm_disabled = false);
+			this.clients.forEach(c => c.disabled = false);
 		}
 	}
 
