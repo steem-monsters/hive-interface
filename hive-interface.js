@@ -58,7 +58,7 @@ class Hive {
 			try {
 				resolve(await this.rpcCall(client => client.broadcast.send(tx)));
 			} catch(err) {
-				utils.log(`All nodes failed sending signed tx [${op_name}]!`, 1, 'Red');
+				utils.log(`All nodes failed sending signed tx [${op_name}]! ${err}`, 1, 'Red');
 				reject(err);
 			}
 		});
@@ -117,6 +117,11 @@ class Hive {
 		}
 	}
 
+	async customJson(id, json, account, key, use_active) {
+		return custom_json(id, json, account, key, use_active);
+	}
+
+	// Left for backwards compatibility
 	async custom_json(id, json, account, key, use_active) {
 		var data = {
 			id: id, 
@@ -178,7 +183,7 @@ class Hive {
         return;
       }
 
-      let cur_block_num = this._options.irreversible ? result.last_irreversible_block_num : result.head_block_number;
+      let cur_block_num = this._options.irreversible ? result.last_irreversible_block_num : (result.head_block_number - (this._options.blocks_behind_head || 0));
 
       if(!this.last_block || isNaN(this.last_block))
         this.last_block = cur_block_num - 1;
@@ -218,7 +223,7 @@ class Hive {
 		utils.log(`Loading virtual ops in block ${block_num}, count: ${ops.length}`, 4);
 
 		for(var i = 0; i < ops.length; i++)
-			await this._options.on_virtual_op(ops[i]);
+			await this._options.on_virtual_op(ops[i], block_num);
 
 		this.last_vop_block = block_num;
 
