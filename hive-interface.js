@@ -1,6 +1,6 @@
 const fs = require('fs');
 const utils = require('./utils');
-const dhive = require('@hivechain/dhive');
+const dhive = require('@hiveio/dhive');
 const HiveEngine = require('./hive-engine');
 
 class Hive {

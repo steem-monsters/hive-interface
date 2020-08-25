@@ -9,7 +9,7 @@
   "author": "yabapmatt",
   "license": "MIT",
   "dependencies": {
-    "@hivechain/dhive": "^0.13.0",
+    "@hiveio/dhive": "^0.14.1",
     "sscjs": "0.0.8"
   }
 }
