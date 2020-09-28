@@ -258,7 +258,7 @@ class Hive {
 					var op = trans.operations[op_index];
 
 					try {
-						await this._options.on_op(op, block_num, block.block_id, block.previous, block.transaction_ids[i], block_time);
+						await this._options.on_op(op, block_num, block.block_id, block.previous, block.transaction_ids[i], block_time, op_index);
 					} catch(err) { utils.log(`Error processing transaction [${block.transaction_ids[i]}]: ${err}`, 1, 'Red'); }
 				}
 			}
