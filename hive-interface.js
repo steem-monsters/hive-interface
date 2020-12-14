@@ -2,7 +2,6 @@ const fs = require('fs');
 const utils = require('./utils');
 const dhive = require('@hiveio/dhive');
 const HiveEngine = require('./hive-engine');
-
 class Hive {
 	clients = [];
 	last_block = 0;
@@ -23,6 +22,11 @@ class Hive {
 		this._options = Object.assign(this._options, options);
 		utils.set_options(this._options);
 		this.clients = this._options.rpc_nodes.map(n => new dhive.Client(n, { timeout: 1000 }));
+		this.clients[0].disabled = true;
+	}
+
+	getNodeList() {
+		return this.clients.filter(c => !c.disabled).concat(this.clients.filter(c => c.disabled)).map(c => c.address);
 	}
 
 	async api(method_name, params) {
