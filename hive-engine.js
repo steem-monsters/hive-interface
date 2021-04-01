@@ -5,6 +5,7 @@ let ssc = null;
 
 module.exports = class HiveEngine {
 	ssc = null;
+	_last_block = 0;
 	_options = {
 		rpc_url: "https://api.hive-engine.com/rpc",
 		chain_id: "ssc-mainnet-hive",
@@ -48,8 +49,10 @@ module.exports = class HiveEngine {
 				await this.processTransaction(block.transactions[i], block.blockNumber, new Date(block.timestamp + 'Z'), block.refSteemBlockNumber, block.refSteemBlockId, block.prevRefSteemBlockId);
 		} catch(err) { utils.log('Error processing block: ' + block.blockNumber + ', Error: ' + err.message); }
 
-		if(this._options.save_state)
+		if(this._options.save_state) {
+			this._last_block = block.blockNumber;
 			this._options.save_state(block.blockNumber);
+		}
 	}
 
 	async processTransaction(tx, ssc_block_num, ssc_block_time, block_num, block_id, prev_block_id) {
@@ -82,4 +85,6 @@ module.exports = class HiveEngine {
 				utils.log(err);
 		});
 	}
+
+	getLastBlock() { return this._last_block; }
 }
