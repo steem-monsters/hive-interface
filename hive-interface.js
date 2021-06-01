@@ -122,7 +122,7 @@ class Hive {
 	}
 
 	async customJson(id, json, account, key, use_active) {
-		return custom_json(id, json, account, key, use_active);
+		return this.custom_json(id, json, account, key, use_active);
 	}
 
 	// Left for backwards compatibility
@@ -142,6 +142,14 @@ class Hive {
 				})
 				.catch(async err => {
 					utils.log(`Error broadcasting custom_json [${id}]. Error: ${err}`, 1, 'Red');
+
+					if(err && err.message && err.message.indexOf('already submitted 5 custom json operation(s) this block') >= 0) {
+						// If too many custom_json operations were submitted in this block, try again in the next block
+						await utils.timeout(3000);
+						this.custom_json(id, json, account, key, use_active).then(resolve).catch(reject);
+						return;
+					}
+
 					reject(err);
 				});
 		});
