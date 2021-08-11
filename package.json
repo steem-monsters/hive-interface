@@ -1,6 +1,6 @@
 {
   "name": "@splinterlands/hive-interface",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "An interface to the Hive blockchain which supports multi-node redundancy for high availability systems.",
   "main": "hive-interface.js",
   "scripts": {

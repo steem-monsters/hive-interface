@@ -6,6 +6,7 @@ class Hive {
 	clients = [];
 	last_block = 0;
 	last_vop_block = 0;
+	chain_props = null;
 	_options = {
 		logging_level: 3,
 		rpc_error_limit: 10,
@@ -66,6 +67,37 @@ class Hive {
 				reject(err);
 			}
 		});
+	}
+
+	async signTx(tx, key) {
+		const chain_props = await this.loadChainProps();
+
+		const prepared_tx = Object.assign({
+			ref_block_num: chain_props.ref_block_num & 0xFFFF,
+			ref_block_prefix: chain_props.ref_block_prefix,
+			expiration: new Date(chain_props.time.getTime() + 600 * 1000).toISOString().split('.')[0],
+			extensions: [],
+		}, tx);
+
+		const signed_tx = this.clients[0].broadcast.sign(prepared_tx, dhive.PrivateKey.fromString(key));
+		return signed_tx;
+	}
+
+	async loadChainProps() {
+		// Check if the chain properties need to be reloaded
+		if(!this.chain_props || this.chain_props.time.getTime() < Date.now() - 60 * 1000) {
+			const result = await this.api('get_dynamic_global_properties');
+			const header = await this.api('get_block_header', [result.last_irreversible_block_num]);
+
+			this.chain_props = {
+				ref_block_num: result.last_irreversible_block_num,
+				ref_block_id: header.previous,
+				ref_block_prefix: Buffer.from(header.previous, 'hex').readUInt32LE(4),
+				time: new Date(result.time + 'Z'),
+			};
+		}
+
+		return this.chain_props;
 	}
 
 	async rpcCall(call) {
