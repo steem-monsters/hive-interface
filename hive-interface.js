@@ -30,6 +30,32 @@ class Hive {
 		return this.clients.filter(c => !c.disabled).concat(this.clients.filter(c => c.disabled)).map(c => c.address);
 	}
 
+	async get_rc_mana(account_name) {
+		return new Promise(async (resolve, reject) => {
+			try {
+				resolve(await this.rpcCall(client => client.rc.getRCMana(account_name)));
+			} catch(err) { 
+				if(!utils.isTxError(err))
+					utils.log(`All nodes failed making API call [rc_api.get_rc_mana].`, 1, 'Red');
+
+				reject(err);
+			}
+		});
+	}
+
+	async api_call(api, method_name, params) {
+		return new Promise(async (resolve, reject) => {
+			try {
+				resolve(await this.rpcCall(client => client.call(api, method_name, params)));
+			} catch(err) { 
+				if(!utils.isTxError(err))
+					utils.log(`All nodes failed making API call [${api}.${method_name}].`, 1, 'Red');
+
+				reject(err);
+			}
+		});
+	}
+
 	async api(method_name, params) {
 		return new Promise(async (resolve, reject) => {
 			try {
