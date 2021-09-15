@@ -210,6 +210,36 @@ class Hive {
 		});
 	}
 
+	// Left for backwards compatibility
+	async customJsonNoQueue(id, json, account, key, use_active) {
+		var data = {
+			id: id, 
+			json: JSON.stringify(json),
+			required_auths: use_active ? [account] : [],
+			required_posting_auths: use_active ? [] : [account]
+		}
+
+		return new Promise((resolve, reject) => {
+			this.broadcast('custom_json', data, key)
+				.then(r => {
+					utils.log(`Custom JSON [${id}] broadcast successfully - Tx: [${r.id}].`, 3);
+					resolve(r);
+				})
+				.catch(async err => {
+					utils.log(`Error broadcasting custom_json [${id}]. Error: ${err}`, 1, 'Red');
+
+					if(err && err.message && err.message.indexOf('already submitted 5 custom json operation(s) this block') >= 0) {
+						// If too many custom_json operations were submitted in this block, try again in the next block
+						await utils.timeout(3000);
+						this.custom_json(id, json, account, key, use_active).then(resolve).catch(reject);
+						return;
+					}
+
+					reject(err);
+				});
+		});
+	}
+
 	async transfer(from, to, amount, memo, key) {
 		return new Promise((resolve, reject) => {
 			this.broadcast('transfer', { amount, from, memo, to }, key)
