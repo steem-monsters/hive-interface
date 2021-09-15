@@ -4,7 +4,6 @@ const dhive = require('@hiveio/dhive');
 const HiveEngine = require('./hive-engine');
 class Hive {
 	clients = [];
-	tx_queue = [];
 	last_block = 0;
 	last_vop_block = 0;
 	chain_props = null;
@@ -25,8 +24,6 @@ class Hive {
 		utils.set_options(this._options);
 		this.clients = this._options.rpc_nodes.map(n => new dhive.Client(n, { timeout: 1000 }));
 		this.clients[0].disabled = true;
-
-		setInterval(() => { this.processTxQueue(); }, 1000);
 	}
 
 	getNodeList() {
@@ -189,24 +186,30 @@ class Hive {
 	// Left for backwards compatibility
 	async custom_json(id, json, account, key, use_active) {
 		var data = {
-			id, 
+			id: id, 
 			json: JSON.stringify(json),
 			required_auths: use_active ? [account] : [],
 			required_posting_auths: use_active ? [] : [account]
 		}
 
 		return new Promise((resolve, reject) => {
-			this.queueTx(data, key, async (data, key) => {
-				this.broadcast('custom_json', data, key)
-					.then(r => {
-						utils.log(`Custom JSON [${id}] broadcast successfully - Tx: [${r.id}].`, 3);
-						resolve(r);
-					})
-					.catch(async err => {
-						utils.log(`Error broadcasting custom_json [${id}]. Error: ${err}`, 1, 'Red');
-						reject(err);
-					});
-			});
+			this.broadcast('custom_json', data, key)
+				.then(r => {
+					utils.log(`Custom JSON [${id}] broadcast successfully - Tx: [${r.id}].`, 3);
+					resolve(r);
+				})
+				.catch(async err => {
+					utils.log(`Error broadcasting custom_json [${id}]. Error: ${err}`, 1, 'Red');
+
+					if(err && err.message && err.message.indexOf('already submitted 5 custom json operation(s) this block') >= 0) {
+						// If too many custom_json operations were submitted in this block, try again in the next block
+						await utils.timeout(3000);
+						this.custom_json(id, json, account, key, use_active).then(resolve).catch(reject);
+						return;
+					}
+
+					reject(err);
+				});
 		});
 	}
 
@@ -352,18 +355,6 @@ class Hive {
 			if (err)
 				utils.log(err);
 		});
-	}
-
-	async queueTx(data, key, tx_call) {
-		this.tx_queue.push({ data, key, tx_call });
-	}
-
-	async processTxQueue() {
-		if(this.tx_queue.length <= 0) return;
-
-		const item = this.tx_queue.shift();
-		utils.log(`Processing queue item ${item.data.id}`, 3);
-		item.tx_call(item.data, item.key);
 	}
 }
 
