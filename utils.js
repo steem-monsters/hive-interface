@@ -56,7 +56,7 @@ function tryParse(json) {
 }
 
 function isTxError(err) {
-	return (err && err.name == 'RPCError' && err.jse_info && err.jse_info.code != 4030200 && (err.jse_info.code == 10 || err.jse_info.code > 1000000));
+	return (err && err.name == 'RPCError' && err.jse_info && err.jse_info.code != 4030200 && ([10, 13].includes(err.jse_info.code) || err.jse_info.code > 1000000));
 }
 
 module.exports = {

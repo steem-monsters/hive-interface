@@ -92,7 +92,7 @@ class Hive {
 			try {
 				resolve(await this.rpcCall(client => client.broadcast.send(tx)));
 			} catch(err) {
-				utils.log(`All nodes failed sending signed tx [${op_name}]! ${err}`, 1, 'Red');
+				utils.log(`All nodes failed sending signed tx [${op_name}]! ${err}`, err.is_tx_error ? 3 : 1, err.is_tx_error ? 'Yellow' : 'Red');
 				reject(err);
 			}
 		});
@@ -147,7 +147,8 @@ class Hive {
 				try {
 					return resolve(await call(client));
 				} catch(err) { 
-					if(utils.isTxError(err))
+					err.is_tx_error = utils.isTxError(err);
+					if(err.is_tx_error)
 						return reject(err);
 
 					// Record that this client had an error
