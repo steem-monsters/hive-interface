@@ -36,7 +36,7 @@ class Hive {
 	async get_rc_mana(account_name) {
 		return new Promise(async (resolve, reject) => {
 			try {
-				resolve(await this.rpcCall(client => client.rc.getRCMana(account_name)));
+				resolve(await this.rpcCall(client => client.rc.getRCMana(account_name), 'get_rc_mana', [account_name]));
 			} catch(err) { 
 				if(!utils.isTxError(err))
 					utils.log(`All nodes failed making API call [rc_api.get_rc_mana].`, 1, 'Red');
@@ -49,7 +49,7 @@ class Hive {
 	async api_call(api, method_name, params) {
 		return new Promise(async (resolve, reject) => {
 			try {
-				resolve(await this.rpcCall(client => client.call(api, method_name, params)));
+				resolve(await this.rpcCall(client => client.call(api, method_name, params), method_name, params));
 			} catch(err) { 
 				if(!utils.isTxError(err))
 					utils.log(`All nodes failed making API call [${api}.${method_name}].`, 1, 'Red');
@@ -62,7 +62,7 @@ class Hive {
 	async api(method_name, params) {
 		return new Promise(async (resolve, reject) => {
 			try {
-				resolve(await this.rpcCall(client => client.database.call(method_name, params)));
+				resolve(await this.rpcCall(client => client.database.call(method_name, params), method_name, params));
 			} catch(err) { 
 				if(!utils.isTxError(err))
 					utils.log(`All nodes failed making API call [${method_name}].`, 1, 'Red');
@@ -75,7 +75,7 @@ class Hive {
 	async broadcast(method_name, params, key) {
 		return new Promise(async (resolve, reject) => {
 			try {
-				resolve(await this.rpcCall(client => client.broadcast.sendOperations([[method_name, params]], dhive.PrivateKey.fromString(key))));
+				resolve(await this.rpcCall(client => client.broadcast.sendOperations([[method_name, params]], dhive.PrivateKey.fromString(key)), 'broadcast', [method_name]));
 			} catch(err) {
 				if(!utils.isTxError(err))
 					utils.log(`All nodes failed broadcasting operation [${method_name}].`, 1, 'Red');
@@ -90,7 +90,7 @@ class Hive {
 			let op_name = tx.operations && tx.operations.length > 0 ? tx.operations[0][0] : null;
 
 			try {
-				resolve(await this.rpcCall(client => client.broadcast.send(tx)));
+				resolve(await this.rpcCall(client => client.broadcast.send(tx), 'send_signed_tx'));
 			} catch(err) {
 				utils.log(`All nodes failed sending signed tx [${op_name}]! ${err}`, err.is_tx_error ? 3 : 1, err.is_tx_error ? 'Yellow' : 'Red');
 				reject(err);
@@ -129,7 +129,7 @@ class Hive {
 		return this.chain_props;
 	}
 
-	async rpcCall(call) {
+	async rpcCall(call, method_name, params) {
 		return new Promise(async (resolve, reject) => {
 			let error = null;
 
@@ -153,7 +153,7 @@ class Hive {
 
 					// Record that this client had an error
 					this.updateClientErrors(client);
-					utils.log(`Error making RPC call to node [${client.address}], Error: ${err}`, 1, 'Yellow');
+					utils.log(`Error making RPC call to node [${client.address}], Method Name: [${method_name}], Params: [${JSON.stringify(params)}], Error: ${err}`, 2, 'Yellow');
 					error = err;
 				}
 			}
@@ -296,7 +296,7 @@ class Hive {
 
       // If we have a new block, process it
       while(cur_block_num > this.last_block)
-        await this.processBlock(this.last_block + 1);
+        await this.processBlock(this.last_block + 1, cur_block_num);
 
       if(this._options.on_virtual_op)
         await this.getVirtualOps(result.last_irreversible_block_num);
@@ -329,11 +329,11 @@ class Hive {
 			this._options.save_state({ last_block: this.last_block, last_vop_block: this.last_vop_block });
 	}
 
-	async processBlock(block_num) {
+	async processBlock(block_num, cur_block_num) {
 		var block = await this.api('get_block', [block_num]);
 
 		// Log every 1000th block loaded just for easy parsing of logs, or every block depending on logging level
-		utils.log('Processing block [' + block_num + ']...', block_num % 1000 == 0 ? 1 : 4);
+		utils.log(`Processing block [${block_num}], Head Block: ${cur_block_num}, Blocks to head: ${cur_block_num - block_num}`, block_num % 1000 == 0 ? 1 : 4);
 
 		if(!block || !block.transactions) {
 			// Block couldn't be loaded...this is typically because it hasn't been created yet
@@ -343,7 +343,7 @@ class Hive {
 		}
 
 		if(this._options.on_block)
-			await this._options.on_block(block_num, block);
+			await this._options.on_block(block_num, block, cur_block_num);
 
 		if(this._options.on_op) {
 			var block_time = new Date(block.timestamp + 'Z');
