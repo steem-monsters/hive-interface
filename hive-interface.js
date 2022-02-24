@@ -17,7 +17,8 @@ class Hive {
 		state_file: 'state.json',
 		on_block: null,
 		on_op: null,
-		on_behind_blocks: null
+		on_behind_blocks: null,
+		replay_batch_size: null
 	};
 
 	constructor(options) {
@@ -294,12 +295,30 @@ class Hive {
           this._options.on_behind_blocks(cur_block_num - this.last_block);
       }
 
-      // If we have a new block, process it
-      while(cur_block_num > this.last_block)
-        await this.processBlock(this.last_block + 1, cur_block_num);
-
-      if(this._options.on_virtual_op)
-        await this.getVirtualOps(result.last_irreversible_block_num);
+		while(cur_block_num > this.last_block) {
+			if(this._options.replay_batch_size && this._options.replay_batch_size > 1) {
+				const _last_block = this.last_block;
+				const promises = []
+				for (let i=0; i<this._options.replay_batch_size; i++ ) {
+					if (_last_block + i >= cur_block_num) {
+						break;
+					}
+					promises.push(this.api('get_block', [_last_block+i]));
+				}
+				const blocks = await Promise.all(promises);
+				for (const block of blocks) {
+					await this.processBlockHelper(block,this.last_block + 1, cur_block_num);
+					if(this._options.on_virtual_op) {
+						await this.getVirtualOps(result.last_irreversible_block_num);
+					}
+				}
+			} else {
+				// If we have a new block, process it
+				await this.processBlock(this.last_block + 1, cur_block_num);
+				if(this._options.on_virtual_op)
+					await this.getVirtualOps(result.last_irreversible_block_num);
+			}
+		}
     } catch (err) { utils.log(`Error getting next block: ${err}`, 1, 'Red'); }
 
 		// Attempt to load the next block after a 1 second delay (or faster if we're behind and need to catch up)
@@ -331,7 +350,10 @@ class Hive {
 
 	async processBlock(block_num, cur_block_num) {
 		var block = await this.api('get_block', [block_num]);
+		return this.processBlockHelper(block, block_num, cur_block_num);
+	}
 
+	async processBlockHelper(block, block_num, cur_block_num) {
 		// Log every 1000th block loaded just for easy parsing of logs, or every block depending on logging level
 		utils.log(`Processing block [${block_num}], Head Block: ${cur_block_num}, Blocks to head: ${cur_block_num - block_num}`, block_num % 1000 == 0 ? 1 : 4);
 
