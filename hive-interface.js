@@ -297,7 +297,7 @@ class Hive {
 
 		while(cur_block_num > this.last_block) {
 			if(this._options.replay_batch_size && this._options.replay_batch_size > 1) {
-				const _last_block = this.last_block;
+				const _last_block = this.last_block + 1;
 				const promises = []
 				for (let i=0; i<this._options.replay_batch_size; i++ ) {
 					if (_last_block + i >= cur_block_num) {
