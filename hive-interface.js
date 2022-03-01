@@ -297,17 +297,18 @@ class Hive {
 
 		while(cur_block_num > this.last_block) {
 			if(this._options.replay_batch_size && this._options.replay_batch_size > 1) {
-				const _last_block = this.last_block + 1;
+				const _first_upcoming_block = this.last_block + 1;
 				const promises = []
 				for (let i=0; i<this._options.replay_batch_size; i++ ) {
-					if (_last_block + i >= cur_block_num) {
+					const consecutive_block = _first_upcoming_block + i;
+					if (consecutive_block > cur_block_num) {
 						break;
 					}
-					promises.push(this.api('get_block', [_last_block+i]));
+					promises.push(this.api('get_block', [consecutive_block]));
 				}
 				const blocks = await Promise.all(promises);
 				for (const block of blocks) {
-					await this.processBlockHelper(block,this.last_block + 1, cur_block_num);
+					await this.processBlockHelper(block, this.last_block + 1, cur_block_num);
 					if(this._options.on_virtual_op) {
 						await this.getVirtualOps(result.last_irreversible_block_num);
 					}
