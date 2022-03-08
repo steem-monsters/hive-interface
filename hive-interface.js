@@ -308,6 +308,11 @@ class Hive {
 				}
 				const blocks = await Promise.all(promises);
 				for (const block of blocks) {
+					if (!block || !block.transactions) {
+						utils.log('Error loading block batch that contains [' + block_num + ']', 4);
+						await utils.timeout(1000);
+						return;
+					}
 					await this.processBlockHelper(block, this.last_block + 1, cur_block_num);
 					if(this._options.on_virtual_op) {
 						await this.getVirtualOps(result.last_irreversible_block_num);
