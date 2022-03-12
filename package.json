@@ -10,6 +10,6 @@
   "license": "MIT",
   "dependencies": {
     "@hiveio/dhive": "^1.0.1",
-    "sscjs": "0.0.8"
+    "sscjs": "0.0.9"
   }
 }
