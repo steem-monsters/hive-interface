@@ -216,14 +216,9 @@ class Hive {
 
 	// Left for backwards compatibility
 	async customJsonNoQueue(id, json, account, key, use_active) {
-		if(this.accounts_used.has(account)) {
-			let count = this.accounts_used.get(account);
-			if(count => 4) 
-				// If we are at the limit, queue instead
-				return this.custom_json(id, json, account, key, use_active);
-			else
-				this.accounts_used.set(account, count++);
-		}
+		
+		if(checkAccountUsageLimit(account))
+			return this.custom_json(id, json, account, key, use_active);
 
 		var data = {
 			id: id, 
@@ -423,6 +418,21 @@ class Hive {
 		});
 	}
 
+	checkAccountUsageLimit(account) {
+		if(this.accounts_used.has(account)) {
+			let count = this.accounts_used.get(account);
+			if(count => 4) 
+				return true;
+			else
+				this.accounts_used.set(account, count++);
+		}
+		else
+			{
+				this.accounts_used.set(account, 1);
+			}
+			return false;
+	}
+
 	async queueTx(data, key, tx_call) {
 		this.tx_queue.push({ data, key, tx_call });
 	}
@@ -441,17 +451,7 @@ class Hive {
 		if(this.tx_queue.length <= 0) return;		
 		let exit = false;
 		let next_account = this.tx_queue[0].data.required_auths.length > 0 ? this.tx_queue[0].data.required_auths[0] : this.tx_queue[0].data.required_posting_auths[0];
-		if(this.accounts_used.has(next_account)) {
-			let count = this.accounts_used.get(next_account);
-			if(count => 4) 
-				exit = true;
-			else
-				this.accounts_used.set(next_account, count++);
-		}
-		else
-			{
-				this.accounts_used.set(next_account, 1);
-			}
+		exit = checkAccountUsageLimit(next_account);
 
 		while(exit == false)
 		{
@@ -462,17 +462,7 @@ class Hive {
 		if(this.tx_queue.length <= 0) exit = true;
 		else {
 			next_account = this.tx_queue[0].data.required_auths.length > 0 ? this.tx_queue[0].data.required_auths[0] : this.tx_queue[0].data.required_posting_auths[0]; 
-			if(this.accounts_used.has(next_account)) {
-				let count = this.accounts_used.get(next_account);
-				if(count => 4) 
-					exit = true;
-				else
-					this.accounts_used.set(next_account, count++);
-			}
-			else
-				{
-					this.accounts_used.set(next_account, 1);
-				}
+			exit = checkAccountUsageLimit(next_account);
 			}
 		}
 	}
