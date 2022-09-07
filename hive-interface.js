@@ -418,6 +418,8 @@ class Hive {
 		});
 	}
 
+	// Check if you have already broadcast 4 transactions from an account, in which case return true.
+	// Otherwise, increment the count and return false.
 	checkAccountUsageLimit(account) {
 		if(this.accounts_used.has(account)) {
 			let count = this.accounts_used.get(account);
