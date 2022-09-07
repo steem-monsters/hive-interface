@@ -421,7 +421,7 @@ class Hive {
 	checkAccountUsageLimit(account) {
 		if(this.accounts_used.has(account)) {
 			let count = this.accounts_used.get(account);
-			if(count => 4) 
+			if(4 <= count) 
 				return true;
 			else
 				this.accounts_used.set(account, count++);
