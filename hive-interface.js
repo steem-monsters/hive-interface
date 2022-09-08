@@ -5,6 +5,8 @@ const HiveEngine = require('./hive-engine');
 class Hive {
 	clients = [];
 	tx_queue = [];
+	accounts_used = new Map();
+	clear_ctr = 0;
 	last_block = 0;
 	last_vop_block = 0;
 	chain_props = null;
@@ -214,13 +216,16 @@ class Hive {
 
 	// Left for backwards compatibility
 	async customJsonNoQueue(id, json, account, key, use_active) {
+		
+		if(checkAccountUsageLimit(account))
+			return this.custom_json(id, json, account, key, use_active);
+
 		var data = {
 			id: id, 
 			json: JSON.stringify(json),
 			required_auths: use_active ? [account] : [],
 			required_posting_auths: use_active ? [] : [account]
 		}
-
 		return new Promise((resolve, reject) => {
 			this.broadcast('custom_json', data, key)
 				.then(r => {
@@ -413,16 +418,55 @@ class Hive {
 		});
 	}
 
+	// Check if you have already broadcast 4 transactions from an account, in which case return true.
+	// Otherwise, increment the count and return false.
+	checkAccountUsageLimit(account) {
+		if(this.accounts_used.has(account)) {
+			let count = this.accounts_used.get(account);
+			if(4 <= count) 
+				return true;
+			else
+				this.accounts_used.set(account, count++);
+		}
+		else
+			{
+				this.accounts_used.set(account, 1);
+			}
+			return false;
+	}
+
 	async queueTx(data, key, tx_call) {
 		this.tx_queue.push({ data, key, tx_call });
 	}
 
 	async processTxQueue() {
-		if(this.tx_queue.length <= 0) return;
+		this.clear_ctr++;
+		// Every 3 seconds, or one block, clear the transaction counts
+		if(this.clear_ctr >= 3)
+		{
+			for (const key of this.accounts_used.keys()) {
+			this.accounts_used.set(key, 0);
+			}
+			this.clear_ctr = 0;
+		}
+		// If the queue is empty, exit here
+		if(this.tx_queue.length <= 0) return;		
+		let exit = false;
+		let next_account = this.tx_queue[0].data.required_auths.length > 0 ? this.tx_queue[0].data.required_auths[0] : this.tx_queue[0].data.required_posting_auths[0];
+		exit = checkAccountUsageLimit(next_account);
 
+		while(exit == false)
+		{
 		const item = this.tx_queue.shift();
-		utils.log(`Processing queue item ${item.data.id}`, 3);
+		utils.log(`Processing queue item ${item.data.id}`, 3);		
+		
 		item.tx_call(item.data, item.key);
+		if(this.tx_queue.length <= 0) exit = true;
+		else {
+			next_account = this.tx_queue[0].data.required_auths.length > 0 ? this.tx_queue[0].data.required_auths[0] : this.tx_queue[0].data.required_posting_auths[0]; 
+			exit = checkAccountUsageLimit(next_account);
+			}
+		}
 	}
 }
 
