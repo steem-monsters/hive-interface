@@ -217,7 +217,7 @@ class Hive {
 	// Left for backwards compatibility
 	async customJsonNoQueue(id, json, account, key, use_active) {
 		
-		if(checkAccountUsageLimit(account))
+		if(this.checkAccountUsageLimit(account))
 			return this.custom_json(id, json, account, key, use_active);
 
 		var data = {
@@ -453,7 +453,7 @@ class Hive {
 		if(this.tx_queue.length <= 0) return;		
 		let exit = false;
 		let next_account = this.tx_queue[0].data.required_auths.length > 0 ? this.tx_queue[0].data.required_auths[0] : this.tx_queue[0].data.required_posting_auths[0];
-		exit = checkAccountUsageLimit(next_account);
+		exit = this.checkAccountUsageLimit(next_account);
 
 		while(exit == false)
 		{
@@ -464,7 +464,7 @@ class Hive {
 		if(this.tx_queue.length <= 0) exit = true;
 		else {
 			next_account = this.tx_queue[0].data.required_auths.length > 0 ? this.tx_queue[0].data.required_auths[0] : this.tx_queue[0].data.required_posting_auths[0]; 
-			exit = checkAccountUsageLimit(next_account);
+			exit = this.checkAccountUsageLimit(next_account);
 			}
 		}
 	}
