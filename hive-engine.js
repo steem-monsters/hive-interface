@@ -1,6 +1,6 @@
 const fs = require('fs');
 const utils = require('./utils');
-const SSC = require('sscjs');
+const SSC = require('@hive-engine/sscjs');
 let ssc = null;
 
 module.exports = class HiveEngine {
